@@ -1,0 +1,64 @@
+package com.scb.channels.research.error;
+
+import com.google.common.base.Joiner;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Throwables;
+
+import java.util.Date;
+import java.util.UUID;
+
+public class Error {
+    private static final Joiner JOINER_CAUSED_BY = Joiner.on("; caused by ").skipNulls();
+
+    private String id;
+    private Date timestamp;
+    private int code;
+    private String message;
+    private String debugMessage;
+
+    public Error(int code, Throwable throwable, boolean includeDebugInformation) {
+        id = UUID.randomUUID().toString();
+        timestamp = new Date();
+        this.code = code;
+        message = stripLineBreaks(throwable.getMessage());
+        if (includeDebugInformation) {
+            debugMessage = stripLineBreaks(JOINER_CAUSED_BY.join(Throwables.getCausalChain(throwable)));
+        }
+    }
+
+    private String stripLineBreaks(String value) {
+        return value == null ? null : value.replaceAll("[\r\n]+", " ");
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public Date getTimestamp() {
+        return timestamp;
+    }
+
+    public int getCode() {
+        return code;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public String getDebugMessage() {
+        return debugMessage;
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+                .add("id", id)
+                .add("timestamp", timestamp)
+                .add("code", code)
+                .add("message", message)
+                .add("debugMessage", debugMessage)
+                .toString();
+    }
+
+}
