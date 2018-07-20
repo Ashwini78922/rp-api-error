@@ -1,0 +1,38 @@
+package com.scb.channels.research.error;
+
+import org.springframework.stereotype.Component;
+
+import javax.ws.rs.BadRequestException;
+
+@Component
+public class RpBadRequestException extends BadRequestException {
+
+    private RpError error;
+
+    public RpBadRequestException(){
+
+    }
+
+    public RpBadRequestException(String message, RpError error) {
+        super(message);
+        this.error = error;
+    }
+
+    public RpBadRequestException(Throwable cause, RpError error) {
+        super(cause);
+        this.error = error;
+    }
+
+    public RpBadRequestException(String message, Throwable cause, RpError error) {
+        super(message, cause);
+        this.error = error;
+    }
+
+    public RpError getError() {
+        return error;
+    }
+
+    public int getErrorCode() {
+        return getError().code();
+    }
+}
