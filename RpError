@@ -1,0 +1,19 @@
+package com.scb.channels.research.error;
+
+public enum RpError {
+    NOT_FOUND(404),
+    INTERNAL_ERROR(500),
+
+    FORBIDDEN(403),
+    BAD_REQUEST(400);
+
+    private final int code;
+
+    RpError(int code) {
+        this.code = code;
+    }
+
+    public int code() {
+        return code;
+    }
+}
