@@ -1,0 +1,95 @@
+package com.scb.channels.research.error;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableSet;
+import com.scb.channels.foundation.util.jackson.JacksonMarshaller;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.ext.ExceptionMapper;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.Set;
+import java.util.function.Supplier;
+
+public class RpExceptionMapper implements ExceptionMapper<Throwable> {
+
+    private static final Set<Class<? extends Throwable>> WRAPPER_THROWABLES = ImmutableSet.of(UndeclaredThrowableException.class, InvocationTargetException.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RpExceptionMapper.class);
+
+    private ObjectMapper objectMapper = JacksonMarshaller.lenientObjectMapper();
+
+    private boolean includeDebugInformation;
+
+    public RpExceptionMapper(){
+
+    }
+
+    @VisibleForTesting
+    void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    public RpExceptionMapper(boolean includeDebugInformation) {
+        this.includeDebugInformation = includeDebugInformation;
+    }
+
+    @Override
+    public Response toResponse(Throwable throwable) {
+
+        Throwable relevantThrowable = Throwables.getCausalChain(throwable)
+                .stream()
+                .filter(t -> !WRAPPER_THROWABLES.contains(t.getClass())).findFirst().orElse(throwable);
+
+
+        if (relevantThrowable instanceof RpBadRequestException) {
+            return buildResponse((RpBadRequestException) relevantThrowable);
+        } else if (relevantThrowable instanceof WebApplicationException) {
+            return buildResponse((WebApplicationException) relevantThrowable);
+        } else {
+            return buildResponse(Response.Status.INTERNAL_SERVER_ERROR, relevantThrowable);
+        }
+    }
+
+    private Response buildResponse(RpBadRequestException exception) {
+        return buildResponse(exception.getResponse().getStatusInfo(), exception, exception::getErrorCode);
+    }
+
+    private Response buildResponse(WebApplicationException exception) {
+        return buildResponse(exception.getResponse().getStatusInfo(), exception);
+    }
+
+    private Response buildResponse(Response.StatusType status, Throwable throwable) {
+        return buildResponse(status, throwable, status::getStatusCode);
+    }
+
+    private Response buildResponse(Response.StatusType status, Throwable throwable, Supplier<Integer> errorCodeSupplier) {
+        Error error = new Error(errorCodeSupplier.get(), throwable, includeDebugInformation);
+
+        if (Response.Status.Family.SERVER_ERROR.equals(status.getFamily())) {
+            LOG.error("Server error {}", error, throwable);
+        } else {
+            LOG.warn("Client error {}", error, throwable);
+        }
+
+        try {
+            return Response
+                    .status(status)
+                    .type(MediaType.APPLICATION_JSON_TYPE)
+                    .entity(objectMapper.writeValueAsString(error))
+                    .build();
+        } catch (Exception e) {
+            LOG.error("Server error mapping application error", e);
+            return Response
+                    .status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .type(MediaType.TEXT_PLAIN_TYPE)
+                    .entity(String.format("Unexpected server error mapping response [%s]. Root error was [%s].", e.toString(), error.getMessage()))
+                    .build();
+        }
+    }
+}
